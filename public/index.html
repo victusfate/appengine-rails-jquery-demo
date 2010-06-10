@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Post</title>
+    <script src="/javascripts/jquery.min.js"></script>
+    <script src="/javascripts/jquery.mustache.js"></script>
+    <script src="/javascripts/jquery.ba-hashchange.min.js"></script>
+    <script>
+      // This should be in a seperate file, but for demonstration purposes I'm doing this.
+      
+      // I was thinking about writing some kind of replacement for the rails flash stuff, buuut
+      // I'm kind of lazy. That is kind of a deficiency of doing things this way, but it IS something
+      // that can be worked around.
+      
+      // This is a template for mustache.js to parse and use. Due to the limitations of mustache in using
+      // dot notation (something.method) inside of template tags, you have to use this syntax
+      // {{#something}}{{method}}{{/something}}, feels cumbersome but it works.
+      var post_template = '<li id="post_{{#entity}}{{id}}{{/entity}}" class="post">' +
+                            '<h2 class="title"><a href="#{{#entity}}{{id}}{{/entity}}">{{title}}</a></h2>' +
+                            '<div class="body_text">{{content}}</div>' +
+                            '<a href="/posts/{{#entity}}{{id}}{{/entity}}/edit">Edit</a> | ' +
+                            '<a href="/posts/{{#entity}}{{id}}{{/entity}}" class="delete_link">Delete</a>' +
+                          '</li>';
+      
+      // Jquery on dom ready
+      $(function(){
+        
+        // Immediately grab the posts json from the duby servlet.
+        $.getJSON('/json/posts', function(data){
+          // Iterate though the returned json, compile the html string with mustache
+          // and then append it to the #posts unordered list.
+          $(data).each(function(){
+            $('#posts').append($.mustache(post_template, this));
+            
+            // Due to the asynchronous nature of the $.getJSON call, and then the time
+            // it takes to append the html, the dom elements might not exist to bind
+            // events to, so event binding has be stalled until a later time.
+            bind_events();
+          });
+        });
+        
+        // Ehhh, it bothered me that I could not use the rails "link_to blah, blah, :method => :delete" helper,
+        // so I wrote the equivilant in javascript. The only thing wrong with this is that it does not pass
+        // the csrf token(which is easy to fix), and it does not pay attention to a success being returned or not,
+        // it just fires and forgets. If someone wants something that would work for real, just tell me.
+        $('.delete_link').live('click', function(event){
+          $.post('/posts/' + $(this).parent('.post').attr('id').substr(-1), {'_method': 'delete'});
+          $(this).parent('.post').remove();
+          return false;
+        });
+      });
+
+      // This binds the hashchange special event provided by the ba-hashchange library that's been included.
+      // What this does is watch the url hash to see if it's been changed or changed, it then either hides every
+      // post except the one that is specified, or shows all of the posts. After binding the event it then immediately
+      // triggers it, so that if a page is refreshed with a hash it selects the correct post.
+      function bind_events(){
+        $(window).bind('hashchange', function(event){
+          // kind of a wierd quirk, when the url either contains no "#" character
+          // or does contains a "#" with no other text after it,  location.hash == ''.
+          if (location.hash == ''){
+            show_all_posts();
+          } else {
+            select_post(location.hash.substr(1)); // cut out the # at the beginning of the location.hash
+          }
+        }).trigger('hashchange');
+      }
+      
+      // Select all of the elements that have the .post class. Then specify that I do NOT want to
+      // select an element that has a specific id. Then call hide on that list of elements.
+      function select_post(post_id){
+        $('.post').not('#post_' + post_id).hide();
+      }
+      
+      // Show everything with a .post class.
+      function show_all_posts(){
+        $('.post').show();
+      }
+    </script>
+    <link type="text/css" media="screen" rel="stylesheet" href="/stylesheets/scaffold.css" />
+  </head>
+  <body>
+    <div id="header">
+      <h1><a href="/">My Awesome Blog</a></h1>
+      <a href="/posts/new">New Post</a>
+    </div>
+    <div id="content">
+      <ul id="posts"></ul>
+    </div>
+  </body>
+</html>
